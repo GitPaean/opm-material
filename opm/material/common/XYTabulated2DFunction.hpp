@@ -49,8 +49,10 @@ namespace Opm {
 
 // TODO: maybe the extrapolation in x or y direction can be a property of the class.
 // TODO: like, for ths type table, we allow extrapolation on this direction, we do not allow
-// TODO: extrapolation on the other directionn.
-//
+// TODO: extrapolation on the other direction.
+
+// TODO: for now, we should not allow extraploation on the lower end, because we do not deal with
+// TODO: negative values
 // TODO: remove all the functions that will not be called from outside, or put them as private members
 
 template <class Scalar>
@@ -103,25 +105,65 @@ public:
             throw NumericalIssue(oss.str());
         };
 
+        std::cout << " x is " << x << std::endl;
+        std::cout << " y is " << y << std::endl;
+        std::cout << " xPos_ " << std::endl;
+        for (const auto value : xPos_ ) {
+            std::cout << value << " ";
+        }
+        std::cout << std::endl;
+        std::cout << " yPos_ " << std::endl;
+        for (const auto value : yPos_ ) {
+            std::cout << value << " ";
+        }
+        std::cout << std::endl;
+
+        /* std::cout << " sampling points " << std::endl;
+        for (const auto& row : samples_) {
+            for (const auto& value : row ) {
+                std::cout << value << " ";
+            }
+            std::cout << std::endl;
+        } */
+
         // bi-linear interpolation: first, calculate the x and y indices in the lookup
         // table ...
         const unsigned i = xSegmentIndex(x);
-        const XType& alpha = xToAlpha(x, i);
 
-        const unsigned j1 = ySegmentIndex(y);
-        const unsigned j2 = ySegmentIndex(y);
-        const YType& beta1 = yToBeta(y, j1);
-        const YType& beta2 = yToBeta(y, j2);
+        std::cout << " i is " << i << std::endl;
 
-        // evaluate the two function values for the same y value ...
-        const YType& s1 = valueAt(i, j1)*(1.0 - beta1) + valueAt(i, j1 + 1)*beta1;
-        const YType& s2 = valueAt(i + 1, j2)*(1.0 - beta2) + valueAt(i + 1, j2 + 1)*beta2;
+        const unsigned j = ySegmentIndex(y);
+        std::cout << " j is " << j << std::endl;
+
+        if ((i == numX() - 1) && (j == numY() - 1))
+            return valueAt(i, j);
+
+        if (i == numX() - 1) {
+            const YType beta = yToBeta(y, j);
+            const YType result = valueAt(i, j) * (1.0 - beta) + valueAt(i, j + 1) * beta;
+            Valgrind::CheckDefined(result);
+            return result;
+        }
+
+        if (j == numY() - 1) {
+            const XType alpha = xToAlpha(x, i);
+            const XType result = valueAt(i, j) * (1.0 - alpha) + valueAt(i + 1, j) * alpha;
+            Valgrind::CheckDefined(result);
+            return result;
+        }
+
+        // normal bi-linear interpolation / extrapolation
+        const XType alpha = xToAlpha(x, i);
+        const YType beta = yToBeta(y, j);
+
+        const YType s1 = valueAt(i, j) * (1.0 - beta) + valueAt(i, j + 1) * beta;
+        const YType s2 = valueAt(i + 1, j) * (1.0 - beta) + valueAt(i + 1, j + 1) * beta;
 
         Valgrind::CheckDefined(s1);
         Valgrind::CheckDefined(s2);
 
         // ... and combine them using the x position
-        const auto& result = s1*(1.0 - alpha) + s2*alpha;
+        const auto result = s1 * (1.0 - alpha) + s2 * alpha;
         Valgrind::CheckDefined(result);
 
         return result;
@@ -214,19 +256,26 @@ private:
     {
         assert(xExtrapolate_ || (xMin() <= x && x <= xMax()));
 
-        // we need at least two sampling points!
-        assert(xPos_.size() >= 2);
+        // TODO: we should have better way to enforce no extrapolation in the low end
+        // assert(x >= xMin());
 
-        if (x <= xPos_[1])
+        // we need at least two sampling points!
+        // TODO: not necessary, right?
+        assert(numX() >= 2);
+
+        if (x <= xMin())
             return 0;
-        else if (x >= xPos_[xPos_.size() - 2])
-            return xPos_.size() - 2;
+        else if (x >= xMax())
+            if (xExtrapolate_)
+                return numX() - 1;
+            else
+                return numX() - 2;
         else {
-            assert(xPos_.size() >= 3);
+            assert(numX() >= 3);
 
             // bisection
-            unsigned lowerIdx = 1;
-            unsigned upperIdx = xPos_.size() - 2;
+            unsigned lowerIdx = 0;
+            unsigned upperIdx = numX() - 1;
             while (lowerIdx + 1 < upperIdx) {
                 unsigned pivotIdx = (lowerIdx + upperIdx) / 2;
                 if (x < xPos_[pivotIdx])
@@ -250,16 +299,19 @@ private:
         // we need at least two sampling points!
         assert(numY() >= 2);
 
-        if (y <= yPos_[1])
+        if (y <= yMin())
             return 0;
-        else if (y >= yPos_[numY() - 2])
-            return numY() - 2;
+        else if (y >= yMax())
+            if (yExtrapolate_)
+                return numY() - 2;
+            else
+                return numY() - 1;
         else {
             assert(numY() >= 3);
 
             // bisection
-            unsigned lowerIdx = 1;
-            unsigned upperIdx = numY() - 2;
+            unsigned lowerIdx = 0;
+            unsigned upperIdx = numY() - 1;
             while (lowerIdx + 1 < upperIdx) {
                 const unsigned pivotIdx = (lowerIdx + upperIdx) / 2;
                 if (y < yPos_[pivotIdx])
@@ -281,6 +333,9 @@ private:
     template <class Evaluation>
     Evaluation xToAlpha(const Evaluation& x, unsigned xSegmentIdx) const
     {
+        if ( xSegmentIdx == numX() -1 )
+            return 0.;
+
         Scalar x1 = xPos_[xSegmentIdx];
         Scalar x2 = xPos_[xSegmentIdx + 1];
         return (x - x1)/(x2 - x1);
@@ -295,6 +350,9 @@ private:
     template <class Evaluation>
     Evaluation yToBeta(const Evaluation& y, unsigned ySegmentIdx) const
     {
+        if ( ySegmentIdx == numY() - 1)
+            return 0.;
+
         Scalar y1 = yPos_[ySegmentIdx];
         Scalar y2 = yPos_[ySegmentIdx + 1];
         return (y - y1)/(y2 - y1);
