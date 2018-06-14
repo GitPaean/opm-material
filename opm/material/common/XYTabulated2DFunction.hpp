@@ -94,10 +94,9 @@ public:
      * If this method is called for a value outside of the tabulated
      * range, a \c Opm::NumericalIssue exception is thrown.
      */
-    template <typename XType, typename YType>
-    auto eval(const XType& x, const YType& y) const
+    template <typename DataType>
+    void eval(const DataType& x, const DataType& y, DataType& result) const
     {
-        // TODO: maybe we should give better notes about x or y is out of the range
         if ( (!xExtrapolate_ && !appliesX(x)) ||
              (!yExtrapolate_ && !appliesY(y)) ) {
             std::ostringstream oss;
@@ -135,38 +134,38 @@ public:
         const unsigned j = ySegmentIndex(y);
         std::cout << " j is " << j << std::endl;
 
-        if ((i == numX() - 1) && (j == numY() - 1))
-            return valueAt(i, j);
+        if ((i == numX() - 1) && (j == numY() - 1)) {
+            result = valueAt(i, j);
+            return;
+        }
 
         if (i == numX() - 1) {
-            const YType beta = yToBeta(y, j);
-            const YType result = valueAt(i, j) * (1.0 - beta) + valueAt(i, j + 1) * beta;
+            const DataType beta = yToBeta(y, j);
+            result = valueAt(i, j) * (1.0 - beta) + valueAt(i, j + 1) * beta;
             Valgrind::CheckDefined(result);
-            return result;
+            return;
         }
 
         if (j == numY() - 1) {
-            const XType alpha = xToAlpha(x, i);
-            const XType result = valueAt(i, j) * (1.0 - alpha) + valueAt(i + 1, j) * alpha;
+            const DataType alpha = xToAlpha(x, i);
+            result = valueAt(i, j) * (1.0 - alpha) + valueAt(i + 1, j) * alpha;
             Valgrind::CheckDefined(result);
-            return result;
+            return;
         }
 
         // normal bi-linear interpolation / extrapolation
-        const XType alpha = xToAlpha(x, i);
-        const YType beta = yToBeta(y, j);
+        const DataType alpha = xToAlpha(x, i);
+        const DataType beta = yToBeta(y, j);
 
-        const YType s1 = valueAt(i, j) * (1.0 - beta) + valueAt(i, j + 1) * beta;
-        const YType s2 = valueAt(i + 1, j) * (1.0 - beta) + valueAt(i + 1, j + 1) * beta;
+        const DataType s1 = valueAt(i, j) * (1.0 - beta) + valueAt(i, j + 1) * beta;
+        const DataType s2 = valueAt(i + 1, j) * (1.0 - beta) + valueAt(i + 1, j + 1) * beta;
 
         Valgrind::CheckDefined(s1);
         Valgrind::CheckDefined(s2);
 
         // ... and combine them using the x position
-        const auto result = s1 * (1.0 - alpha) + s2 * alpha;
+        result = s1 * (1.0 - alpha) + s2 * alpha;
         Valgrind::CheckDefined(result);
-
-        return result;
     }
 
 private:
