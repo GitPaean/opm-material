@@ -104,9 +104,9 @@ public:
             throw NumericalIssue(oss.str());
         };
 
-        std::cout << " x is " << x << std::endl;
-        std::cout << " y is " << y << std::endl;
-        std::cout << " xPos_ " << std::endl;
+        // std::cout << " x is " << x << std::endl;
+        // std::cout << " y is " << y << std::endl;
+        /* std::cout << " xPos_ " << std::endl;
         for (const auto value : xPos_ ) {
             std::cout << value << " ";
         }
@@ -115,7 +115,7 @@ public:
         for (const auto value : yPos_ ) {
             std::cout << value << " ";
         }
-        std::cout << std::endl;
+        std::cout << std::endl; */
 
         /* std::cout << " sampling points " << std::endl;
         for (const auto& row : samples_) {
@@ -129,10 +129,10 @@ public:
         // table ...
         const unsigned i = xSegmentIndex(x);
 
-        std::cout << " i is " << i << std::endl;
+        // std::cout << " i is " << i << std::endl;
 
         const unsigned j = ySegmentIndex(y);
-        std::cout << " j is " << j << std::endl;
+        // std::cout << " j is " << j << std::endl;
 
         if ((i == numX() - 1) && (j == numY() - 1)) {
             result = valueAt(i, j);
